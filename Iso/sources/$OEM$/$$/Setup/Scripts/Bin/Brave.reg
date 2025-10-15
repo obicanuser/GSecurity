@@ -1,0 +1,18 @@
+Windows Registry Editor Version 5.00
+
+; Brave
+
+[HKEY_LOCAL_MACHINE\Software\Policies\BraveSoftware]
+
+[HKEY_LOCAL_MACHINE\Software\Policies\BraveSoftware\Brave]
+"ExtensionManifestV2Availability"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\Software\Policies\BraveSoftware\Brave\ExtensionInstallForcelist]
+"1"="cjpalhdlnbpafiamejdnhcphjbkeiagm;https://clients2.google.com/service/update2/crx"
+"2"="jfnangjojcioomickmmnfmiadkfhcdmd;https://clients2.google.com/service/update2/crx"
+"4"="gebbhagfogifgggkldgodflihgfeippi;https://clients2.google.com/service/update2/crx"
+"3"="kegphgaihkjoophpabchkmpaknehfamb;https://clients2.google.com/service/update2/crx"
+"5"="fihnjjcciajhdojfnbdddfaoknhalnja;https://clients2.google.com/service/update2/crx"
+
+[HKEY_LOCAL_MACHINE\Software\Policies\BraveSoftware\Brave\3rdparty\extensions\cjpalhdlnbpafiamejdnhcphjbkeiagm\policy]
+"adminSettings"="{"timeStamp":1727352000000,"version":"1.60.0","userSettings":{"advancedUserEnabled":true,"webrtcIPAddressHidden":true,"hyperlinkAuditingDisabled":true,"prefetchDisabled":true,"cloudStorageEnabled":false},"advancedSettings":["suspendNetworkRequests:1","strictBlockingBypassDuration:0","cnameIgnore1stParty:true","blockingProfiles":"11111/#F00 11010/#C0F 11001/#00F 00001/#F80"]}"
