@@ -3,4 +3,4 @@ Windows Registry Editor Version 5.00
 ; BlockAds by Gorstak
 
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings]
-"AutoConfigURL"="https://raw.githubusercontent.com/GSZD79/Pac/refs/heads/main/BlockAds.pac"
+"AutoConfigURL"="https://raw.githubusercontent.com/obicanuser/Scripts/refs/heads/main/BlockAds.pac"
