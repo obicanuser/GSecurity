@@ -1,0 +1,64 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\DataFactory]
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\DataFactory\HandlerInfo]
+"HandlerRequired"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\LSASS.exe]
+"MitigationOptions"=dword:00000031
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\UAC\COMAutoApprovalList]
+"{ca8c87c1-929d-45ba-94db-ef8e6cb346ad}"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows NT\Terminal Services]
+"fSingleSessionPerUser"=dword:00000001
+"fEnableSmartCard"=dword:00000000
+"AllowBasic"=dword:00000000
+"fDenyTSConnections"=dword:00000001
+"fAllowTSConnections"=dword:00000000
+"AllowMultipleTSSessions"=dword:00000000
+"fAllowToGetHelp"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\HomeGroup]
+"DisableHomeGroup"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\PowerShell]
+"DisableRemoteExecution"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WinRM]
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WinRM\Client]
+"AllowBasic"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WinRM\Service]
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WinRM\Service\WinRS]
+"AllowRemoteShellAccess"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WorkFolders]
+"AutoProvision"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WorkplaceJoin]
+"autoWorkplaceJoin"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\GraphicsDrivers]
+"HwSchMode"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Remote Assistance]
+"fAllowFullControl"=dword:00000000
+"fEnableChatControl"=dword:00000000
+"CreateEncryptedOnlyTickets"=dword:00000001
+"fAllowToGetHelp"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\SecurePipeServers\winreg]
+"RemoteRegAccess"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Terminal Server]
+"fSingleSessionPerUser"=dword:00000001
+"fEnableSmartCard"=dword:00000000
+"AllowBasic"=dword:00000000
+"fDenyTSConnections"=dword:00000001
+"fAllowTSConnections"=dword:00000000
+"AllowMultipleTSSessions"=dword:00000000
+"fAllowToGetHelp"=dword:00000000

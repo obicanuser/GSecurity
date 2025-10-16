@@ -1,0 +1,93 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"MenuShowDelay"="400"
+
+[HKEY_CURRENT_USER\Software\Microsoft\GameBar]
+"AllowAutoGameMode"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+"EnableBalloonTips"=dword:00000001
+"DesktopLivePreviewHoverTime"=dword:00000000
+"StartButtonBalloonTip"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops]
+"VDSoftLandingCampaignDone"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings]
+"MaxConnectionsPer1_0Server"=dword:00000004
+"MaxConnectionsPerServer"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Dfrg\BootOptimizeFunction]
+"Enable"="y"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Internet Explorer\MAIN]
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Internet Explorer\MAIN\FeatureControl]
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Internet Explorer\MAIN\FeatureControl\FEATURE_MAXCONNECTIONSPER1_0SERVER]
+"iexplore.exe"=dword:00000006
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Internet Explorer\MAIN\FeatureControl\FEATURE_MAXCONNECTIONSPERSERVER]
+"iexplore.exe"=dword:00000006
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\MSMQ\Parameters]
+"TCPNoDelay"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile]
+"SystemResponsiveness"=dword:00000000
+"NetworkThrottlingIndex"=dword:00ffffff
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio]
+"Scheduling Category"="High"
+"SFIO Priority"="High"
+"GPU Priority"=dword:00000002
+"Priority"=dword:00000001
+"Clock Rate"=dword:00000a96
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games]
+"SFIO Priority"="High"
+"Background Only"="True"
+"Scheduling Category"="High"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Low Latency]
+"Latency Sensitive"="True"
+"GPU Priority"=dword:00000002
+"Clock Rate"=dword:00000a96
+"Scheduling Category"="High"
+"SFIO Priority"="High"
+"Background Only"="False"
+"Priority"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio]
+"Clock Rate"=dword:00000a96
+"SFIO Priority"="High"
+"GPU Priority"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config]
+"DownloadMode"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\Psched]
+"NonBestEffortLimit"=dword:00000014
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WindowsUpdate\AU]
+"NoAutoRebootWithLoggedOnUsers"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\FileSystem]
+"NtfsDisableLastAccessUpdate"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\Session Manager\Memory Management]
+"DisablePagingExecutive"=dword:00000000
+"ClearPageFileAtShutdown"="0"
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\Session Manager\Memory Management\PrefetchParameters]
+"EnablePrefetcher"=dword:00000001
+"EnableSuperfetch"=dword:00000001
+"EnableBoottrace"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\Tcpip\Parameters\Interfaces]
+"TCPNoDelay"=dword:00000000
+"TcpAckFrequency"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\wscsvc]
+"Start"=dword:00000004
