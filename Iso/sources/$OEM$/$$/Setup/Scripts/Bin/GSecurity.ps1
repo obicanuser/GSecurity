@@ -121,6 +121,12 @@ function Calculate-FileHash {
 # Quarantine File (Crash-Proof)
 function Quarantine-File {
     param ([string]$filePath)
+    # Check if the file is used by ctfmon.exe
+    $ctfmonModules = (Get-Process -Name "ctfmon" -ErrorAction SilentlyContinue).Modules | Select-Object -ExpandProperty FileName
+    if ($ctfmonModules -contains $filePath) {
+        Write-Log "Skipping quarantine of $filePath as it is used by ctfmon.exe"
+        return
+    }
     try {
         $quarantinePath = Join-Path -Path $quarantineFolder -ChildPath (Split-Path $filePath -Leaf)
         Move-Item -Path $filePath -Destination $quarantinePath -Force -ErrorAction Stop
