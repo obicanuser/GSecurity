@@ -1,308 +1,412 @@
-﻿# Simple Antivirus by Gorstak
- 
-# Define paths and parameters
-$taskName = "SimpleAntivirusStartup"
-$taskDescription = "Runs the Simple Antivirus script at user logon with admin privileges."
-$scriptDir = "C:\Windows\Setup\Scripts\Bin"
-$scriptPath = "$scriptDir\GSecurity.ps1"
-$quarantineFolder = "C:\Quarantine"
-$logFile = "$quarantineFolder\antivirus_log.txt"
-$localDatabase = "$quarantineFolder\scanned_files.txt"
-$scannedFiles = @{} # Initialize empty hash table
- 
-# Check admin privileges
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-Write-Host "Running as admin: $isAdmin"
- 
-# Logging Function with Rotation
-function Write-Log {
-    param ([string]$message)
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logEntry = "[$timestamp] $message"
-    Write-Host "Logging: $logEntry"
-    if (-not (Test-Path $quarantineFolder)) {
-        New-Item -Path $quarantineFolder -ItemType Directory -Force -ErrorAction Stop | Out-Null
-        Write-Host "Created folder: $quarantineFolder"
-    }
-    if ((Test-Path $logFile) -and ((Get-Item $logFile -ErrorAction SilentlyContinue).Length -ge 10MB)) {
-        $archiveName = "$quarantineFolder\antivirus_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-        Rename-Item -Path $logFile -NewName $archiveName -ErrorAction Stop
-        Write-Host "Rotated log to: $archiveName"
-    }
-    $logEntry | Out-File -FilePath $logFile -Append -Encoding UTF8 -ErrorAction Stop
-}
- 
-# Initial log with diagnostics
-Write-Log "Script initialized. Admin: $isAdmin, User: $env:USERNAME, SID: $([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"
- 
-# Ensure execution policy allows script
-if ((Get-ExecutionPolicy) -eq "Restricted") {
-    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue
-    Write-Log "Set execution policy to Bypass for current user."
-}
- 
-# Setup script directory and copy script
-if (-not (Test-Path $scriptDir)) {
-    New-Item -Path $scriptDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
-    Write-Log "Created script directory: $scriptDir"
-}
-if (-not (Test-Path $scriptPath) -or (Get-Item $scriptPath).LastWriteTime -lt (Get-Item $MyInvocation.MyCommand.Path).LastWriteTime) {
-    Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $scriptPath -Force -ErrorAction Stop
-    Write-Log "Copied/Updated script to: $scriptPath"
-}
- 
-# Register scheduled task as SYSTEM
-$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if (-not $existingTask -and $isAdmin) {
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`""
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-    $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description $taskDescription
-    Register-ScheduledTask -TaskName $taskName -InputObject $task -Force -ErrorAction Stop
-    Write-Log "Scheduled task '$taskName' registered to run as SYSTEM."
-} elseif (-not $isAdmin) {
-    Write-Log "Skipping task registration: Admin privileges required"
-}
- 
-# Load or Reset Scanned Files Database
-if (Test-Path $localDatabase) {
-    try {
-        $scannedFiles.Clear() # Reset hash table before loading
-        $lines = Get-Content $localDatabase -ErrorAction Stop
-        foreach ($line in $lines) {
-            if ($line -match "^([0-9a-f]{64}),(true|false)$") {
-                $scannedFiles[$matches[1]] = [bool]$matches[2]
-            }
+# GSecurity.ps1
+# Author: Gorstak
+
+function Register-SystemLogonScript {
+    param (
+        [string]$TaskName = "GSecurity"
+    )
+
+    # Define paths
+    $scriptSource = $MyInvocation.MyCommand.Path
+    if (-not $scriptSource) {
+        $scriptSource = $PSCommandPath
+        if (-not $scriptSource) {
+            Write-Output "Error: Could not determine script path."
+            return
         }
-        Write-Log "Loaded $($scannedFiles.Count) scanned file entries from database."
-    } catch {
-        Write-Log "Failed to load database: $($_.Exception.Message)"
-        $scannedFiles.Clear() # Reset on failure
     }
-} else {
-    $scannedFiles.Clear() # Ensure reset if no database
-    New-Item -Path $localDatabase -ItemType File -Force -ErrorAction Stop | Out-Null
-    Write-Log "Created new database: $localDatabase"
-}
- 
-# Take Ownership and Modify Permissions (Aggressive)
-function Set-FileOwnershipAndPermissions {
-    param ([string]$filePath)
+
+    $targetFolder = "C:\Windows\Setup\Scripts\Bin"
+    $targetPath = Join-Path $targetFolder (Split-Path $scriptSource -Leaf)
+
+    # Create required folders
+    if (-not (Test-Path $targetFolder)) {
+        New-Item -Path $targetFolder -ItemType Directory -Force | Out-Null
+        Write-Output "Created folder: $targetFolder"
+    }
+
+    # Copy the script
     try {
-        takeown /F $filePath /A | Out-Null
-        icacls $filePath /reset | Out-Null
-        icacls $filePath /grant "Administrators:F" /inheritance:d | Out-Null
-        Write-Log "Forcibly set ownership and permissions for $filePath"
-        return $true
+        Copy-Item -Path $scriptSource -Destination $targetPath -Force -ErrorAction Stop
+        Write-Output "Copied script to: $targetPath"
     } catch {
-        Write-Log "Failed to set ownership/permissions for ${filePath}: $($_.Exception.Message)"
-        return $false
-    }
-}
- 
-# Calculate File Hash and Signature
-function Calculate-FileHash {
-    param ([string]$filePath)
-    try {
-        $signature = Get-AuthenticodeSignature -FilePath $filePath -ErrorAction Stop
-        $hash = Get-FileHash -Path $filePath -Algorithm SHA256 -ErrorAction Stop
-        Write-Log "Signature status for ${filePath}: $($signature.Status) - $($signature.StatusMessage)"
-        return [PSCustomObject]@{
-            Hash = $hash.Hash.ToLower()
-            Status = $signature.Status
-            StatusMessage = $signature.StatusMessage
-        }
-    } catch {
-        Write-Log "Error processing ${filePath}: $($_.Exception.Message)"
-        return $null
-    }
-}
- 
-# Quarantine File (Crash-Proof)
-function Quarantine-File {
-    param ([string]$filePath)
-    # Check if the file is used by ctfmon.exe
-    $ctfmonModules = (Get-Process -Name "ctfmon" -ErrorAction SilentlyContinue).Modules | Select-Object -ExpandProperty FileName
-    if ($ctfmonModules -contains $filePath) {
-        Write-Log "Skipping quarantine of $filePath as it is used by ctfmon.exe"
+        Write-Output "Failed to copy script: $_"
         return
     }
+
+    # Define the scheduled task action and trigger
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$targetPath`""
+    $trigger = New-ScheduledTaskTrigger -AtStartup
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+    # Register the task
     try {
-        $quarantinePath = Join-Path -Path $quarantineFolder -ChildPath (Split-Path $filePath -Leaf)
-        Move-Item -Path $filePath -Destination $quarantinePath -Force -ErrorAction Stop
-        Write-Log "Quarantined file: $filePath to $quarantinePath"
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal
+        Write-Output "Scheduled task '$TaskName' created to run at system startup under SYSTEM."
     } catch {
-        Write-Log "Failed to quarantine ${filePath}: $($_.Exception.Message)"
+        Write-Output "Failed to register task: $_"
     }
 }
- 
-# Stop Processes Using DLL (Aggressive)
-function Stop-ProcessUsingDLL {
-    param ([string]$filePath)
+
+Register-SystemLogonScript
+
+function Write-Log {
+    param (
+        [string]$Message,
+        [string]$EntryType = "Information"
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$EntryType] $Message"
+
     try {
-        $processes = Get-Process | Where-Object { ($_.Modules | Where-Object { $_.FileName -eq $filePath }) }
-        foreach ($process in $processes) {
-            Stop-Process -Id $process.Id -Force -ErrorAction Stop
-            Write-Log "Stopped process $($process.Name) (PID: $($process.Id)) using $filePath"
+        if (-not [System.Diagnostics.EventLog]::SourceExists("GSecurity")) {
+            New-EventLog -LogName Application -Source "GSecurity"
         }
+        Write-EventLog -LogName Application -Source "GSecurity" -EntryType $EntryType -EventId 1000 -Message $Message
     } catch {
-        Write-Log "Error stopping processes for ${filePath}: $($_.Exception.Message)"
-        try {
-            $processes = Get-Process | Where-Object { ($_.Modules | Where-Object { $_.FileName -eq $filePath }) }
-            foreach ($process in $processes) {
-                taskkill /PID $process.Id /F | Out-Null
-                Write-Log "Force-killed process $($process.Name) (PID: $($process.Id)) using taskkill"
-            }
-        } catch {
-            Write-Log "Fallback process kill failed for ${filePath}: $($_.Exception.Message)"
+        Add-Content -Path "$env:TEMP\GSecurity.log" -Value $logEntry
+    }
+
+    if ($Host.Name -match "ConsoleHost") {
+        switch ($EntryType) {
+            "Error" { Write-Host $logEntry -ForegroundColor Red }
+            "Warning" { Write-Host $logEntry -ForegroundColor Yellow }
+            default { Write-Host $logEntry -ForegroundColor White }
         }
     }
 }
- 
-# Remove Unsigned DLLs (Exclude Problem Folders)
-function Remove-UnsignedDLLs {
-    Write-Log "Starting unsigned DLL scan."
-    $drives = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -in (2, 3, 4) }
-    foreach ($drive in $drives) {
-        $root = $drive.DeviceID + "\"
-        Write-Log "Scanning drive: $root"
-        try {
-            $dllFiles = Get-ChildItem -Path $root -Filter *.dll -Recurse -File -Exclude @($quarantineFolder, "C:\Windows\System32\config") -ErrorAction Stop
-            foreach ($dll in $dllFiles) {
-                try {
-                    $fileHash = Calculate-FileHash -filePath $dll.FullName
-                    if ($fileHash) {
-                        if ($scannedFiles.ContainsKey($fileHash.Hash)) {
-                            Write-Log "Skipping already scanned file: $($dll.FullName) (Hash: $($fileHash.Hash))"
-                            if (-not $scannedFiles[$fileHash.Hash]) {
-                                if (Set-FileOwnershipAndPermissions -filePath $dll.FullName) {
-                                    Stop-ProcessUsingDLL -filePath $dll.FullName
-                                    Quarantine-File -filePath $dll.FullName
-                                }
-                            }
-                        } else {
-                            $isValid = $fileHash.Status -eq "Valid" # Only "Valid" is safe
-                            $scannedFiles[$fileHash.Hash] = $isValid
-                            "$($fileHash.Hash),$isValid" | Out-File -FilePath $localDatabase -Append -Encoding UTF8 -ErrorAction Stop
-                            Write-Log "Scanned new file: $($dll.FullName) (Valid: $isValid)"
-                            if (-not $isValid) {
-                                if (Set-FileOwnershipAndPermissions -filePath $dll.FullName) {
-                                    Stop-ProcessUsingDLL -filePath $dll.FullName
-                                    Quarantine-File -filePath $dll.FullName
-                                }
-                            }
-                        }
-                    }
-                } catch {
-                    Write-Log "Error processing file $($dll.FullName): $($_.Exception.Message)"
-                }
-            }
-        } catch {
-            Write-Log "Scan failed for drive ${root} $($_.Exception.Message)"
-        }
-    }
-    # Explicit System32 Scan
-    Write-Log "Starting explicit System32 scan."
+
+function Disable-Network-Briefly {
     try {
-        $system32Files = Get-ChildItem -Path "C:\Windows\System32" -Filter *.dll -File -ErrorAction Stop
-        foreach ($dll in $system32Files) {
-            try {
-                $fileHash = Calculate-FileHash -filePath $dll.FullName
-                if ($fileHash) {
-                    if ($scannedFiles.ContainsKey($fileHash.Hash)) {
-                        Write-Log "Skipping already scanned System32 file: $($dll.FullName) (Hash: $($fileHash.Hash))"
-                        if (-not $scannedFiles[$fileHash.Hash]) {
-                            if (Set-FileOwnershipAndPermissions -filePath $dll.FullName) {
-                                Stop-ProcessUsingDLL -filePath $dll.FullName
-                                Quarantine-File -filePath $dll.FullName
-                            }
-                        }
+        $adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
+        foreach ($adapter in $adapters) {
+            Disable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 3
+        foreach ($adapter in $adapters) {
+            Enable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        Write-Log "Network temporarily disabled and re-enabled." "Warning"
+    } catch {
+        Write-Log "Failed to toggle network adapters: $_" "Error"
+    }
+}
+
+function Kill-Process-And-Parent {
+    param ([int]$Pid)
+    try {
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$Pid"
+        if ($proc) {
+            Stop-Process -Id $Pid -Force -ErrorAction SilentlyContinue
+            Write-Log "Killed process PID $Pid ($($proc.Name))" "Warning"
+            if ($proc.ParentProcessId) {
+                $parentProc = Get-Process -Id $proc.ParentProcessId -ErrorAction SilentlyContinue
+                if ($parentProc) {
+                    if ($parentProc.ProcessName -eq "explorer") {
+                        Stop-Process -Id $parentProc.Id -Force -ErrorAction SilentlyContinue
+                        Start-Process "explorer.exe"
+                        Write-Log "Restarted Explorer after killing parent of suspicious process." "Warning"
                     } else {
-                        $isValid = $fileHash.Status -eq "Valid"
-                        $scannedFiles[$fileHash.Hash] = $isValid
-                        "$($fileHash.Hash),$isValid" | Out-File -FilePath $localDatabase -Append -Encoding UTF8 -ErrorAction Stop
-                        Write-Log "Scanned new System32 file: $($dll.FullName) (Valid: $isValid)"
-                        if (-not $isValid) {
-                            if (Set-FileOwnershipAndPermissions -filePath $dll.FullName) {
-                                Stop-ProcessUsingDLL -filePath $dll.FullName
-                                Quarantine-File -filePath $dll.FullName
-                            }
-                        }
+                        Stop-Process -Id $parentProc.Id -Force -ErrorAction SilentlyContinue
+                        Write-Log "Also killed parent process: $($parentProc.ProcessName) (PID $($parentProc.Id))" "Warning"
                     }
                 }
-            } catch {
-                Write-Log "Error processing System32 file $($dll.FullName): $($_.Exception.Message)"
             }
         }
-    } catch {
-        Write-Log "System32 scan failed: $($_.Exception.Message)"
-    }
+    } catch {}
 }
- 
-# File System Watcher (Throttled and Crash-Proof)
-$drives = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -in (2, 3, 4) }
-foreach ($drive in $drives) {
-    $monitorPath = $drive.DeviceID + "\"
-    try {
-        $fileWatcher = New-Object System.IO.FileSystemWatcher
-        $fileWatcher.Path = $monitorPath
-        $fileWatcher.Filter = "*.dll"
-        $fileWatcher.IncludeSubdirectories = $true
-        $fileWatcher.EnableRaisingEvents = $true
-        $fileWatcher.NotifyFilter = [System.IO.NotifyFilters]::FileName -bor [System.IO.NotifyFilters]::LastWrite
- 
-        $action = {
-            param($sender, $e)
+
+function Start-XSSWatcher {
+    while ($true) {
+        $conns = Get-NetTCPConnection -State Established
+        foreach ($conn in $conns) {
+            $remoteIP = $conn.RemoteAddress
             try {
-                if ($e.ChangeType -in "Created", "Changed" -and $e.FullPath -notlike "$quarantineFolder*") {
-                    Write-Log "Detected file change: $($e.FullPath)"
-                    $fileHash = Calculate-FileHash -filePath $e.FullPath
-                    if ($fileHash) {
-                        if ($scannedFiles.ContainsKey($fileHash.Hash)) {
-                            Write-Log "Skipping already scanned file: $($e.FullPath) (Hash: $($fileHash.Hash))"
-                            if (-not $scannedFiles[$fileHash.Hash]) {
-                                if (Set-FileOwnershipAndPermissions -filePath $e.FullPath) {
-                                    Stop-ProcessUsingDLL -filePath $e.FullPath
-                                    Quarantine-File -filePath $e.FullPath
-                                }
-                            }
-                        } else {
-                            $isValid = $fileHash.Status -eq "Valid"
-                            $scannedFiles[$fileHash.Hash] = $isValid
-                            "$($fileHash.Hash),$isValid" | Out-File -FilePath $localDatabase -Append -Encoding UTF8 -ErrorAction Stop
-                            Write-Log "Added new file to database: $($e.FullPath) (Valid: $isValid)"
-                            if (-not $isValid) {
-                                if (Set-FileOwnershipAndPermissions -filePath $e.FullPath) {
-                                    Stop-ProcessUsingDLL -filePath $e.FullPath
-                                    Quarantine-File -filePath $e.FullPath
-                                }
-                            }
-                        }
-                    }
-                    Start-Sleep -Milliseconds 500 # Throttle to prevent event flood
+                $hostEntry = [System.Net.Dns]::GetHostEntry($remoteIP)
+                if ($hostEntry.HostName -match "xss") {
+                    Disable-Network-Briefly
+                    New-NetFirewallRule -DisplayName "BlockXSS-$remoteIP" -Direction Outbound -RemoteAddress $remoteIP -Action Block -Force -ErrorAction SilentlyContinue
+                    Write-Log "XSS detected, blocked $($hostEntry.HostName) and disabled network." "Error"
                 }
-            } catch {
-                Write-Log "Watcher error for $($e.FullPath): $($_.Exception.Message)"
-            }
+            } catch {}
         }
- 
-        Register-ObjectEvent -InputObject $fileWatcher -EventName Created -Action $action -ErrorAction Stop
-        Register-ObjectEvent -InputObject $fileWatcher -EventName Changed -Action $action -ErrorAction Stop
-        Write-Log "FileSystemWatcher set up for $monitorPath"
-    } catch {
-        Write-Log "Failed to set up watcher for ${monitorPath} $($_.Exception.Message)"
+        Start-Sleep -Seconds 3
     }
 }
- 
-# Initial scan
-Remove-UnsignedDLLs
-Write-Log "Initial scan completed. Monitoring started."
- 
-# Keep script running with crash protection
-Write-Host "Antivirus running. Press [Ctrl] + [C] to stop."
-try {
-    while ($true) { Start-Sleep -Seconds 10 }
-} catch {
-    Write-Log "Main loop crashed: $($_.Exception.Message)"
-    Write-Host "Script crashed. Check $logFile for details."
+
+function Kill-Listeners {
+    $knownServices = @("svchost", "System", "lsass", "wininit") # Safe system processes
+    $connections = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue
+
+    foreach ($conn in $connections) {
+        try {
+            $proc = Get-Process -Id $conn.OwningProcess -ErrorAction Stop
+            if ($proc.ProcessName -notin $knownServices) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        } catch {
+            # Ignore processes that no longer exist or access-denied
+        }
+    }
+}
+
+# Import required module
+Import-Module -Name Microsoft.PowerShell.Management
+
+# Define base registry path for WOW6432Node CLSIDs
+$basePath = "HKLM:\SOFTWARE\WOW6432Node\Classes\CLSID"
+$hkcrBasePath = "HKCR:\WOW6432Node\CLSID"
+
+# Function to detect InProcServer32 and InprocHandler32 custom controls
+function Detect-InProcControls {
+    $allPaths = @()
+    $allPaths += Get-ChildItem -Path $basePath -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match "{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}}" }
+    $allPaths += Get-ChildItem -Path $hkcrBasePath -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match "{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}}" }
+
+    foreach ($path in $allPaths) {
+        $inProcPath = Join-Path $path.PSPath "InProcServer32"
+        $inProcHandlerPath = Join-Path $path.PSPath "InprocHandler32"
+        $value = $null
+
+        if (Test-Path $inProcPath) {
+            $value = (Get-ItemProperty -Path $inProcPath -ErrorAction SilentlyContinue)."(default)"
+        } elseif (Test-Path $inProcHandlerPath) {
+            $value = (Get-ItemProperty -Path $inProcHandlerPath -ErrorAction SilentlyContinue)."(default)"
+        }
+
+        if ($value -and (Test-Path $value)) {
+            Write-Host "Detected InProc control at $path.PSPath with value $value"
+            return $true, $path.PSPath, $value
+        }
+    }
+    return $false, $null, $null
+}
+
+# Function to remove InProc controls
+function Remove-InProcControls {
+    param ([string]$path, [string]$value)
+    if ($path -and $value) {
+        try {
+            # Remove registry entry
+            $parentPath = Split-Path $path -Parent
+            $keyName = Split-Path $path -Leaf
+            Remove-ItemProperty -Path $parentPath -Name $keyName -Force -ErrorAction Stop
+            Write-Host "Removed InProc control registry entry at $path"
+            # Remove associated file if it exists
+            if (Test-Path $value) {
+                Remove-Item -Path $value -Force -ErrorAction Stop
+                Write-Host "Removed file: $value"
+            }
+        } catch {
+            Write-Host "Error removing $path : $_"
+        }
+    }
+}
+
+function Detect-RootkitByNetstat {
+    # Run netstat -ano and store the output
+    $netstatOutput = netstat -ano | Where-Object { $_ -match '\d+\.\d+\.\d+\.\d+:\d+' }
+
+    if (-not $netstatOutput) {
+        Write-Warning "No network connections found via netstat -ano. Possible rootkit hiding activity."
+
+        # Optionally: Log the suspicious event
+        $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+        $logFile = "$env:TEMP\rootkit_suspected_$timestamp.log"
+        "Netstat -ano returned no results. Possible rootkit activity." | Out-File -FilePath $logFile
+
+        # Get all running processes (you could refine this)
+        $processes = Get-Process | Where-Object { $_.Id -ne $PID }
+
+        foreach ($proc in $processes) {
+            try {
+                # Comment this line if you want to observe first
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                Write-Output "Stopped process: $($proc.ProcessName) (PID: $($proc.Id))"
+            } catch {
+                Write-Warning "Could not stop process: $($proc.ProcessName) (PID: $($proc.Id))"
+            }
+        }
+    } else {
+        Write-Host "Netstat looks normal. Active connections detected."
+    }
+}
+
+function Start-StealthKiller {
+    while ($true) {
+        # Kill unsigned or hidden-attribute processes
+        Get-CimInstance Win32_Process | ForEach-Object {
+            $exePath = $_.ExecutablePath
+            if ($exePath -and (Test-Path $exePath)) {
+                $isHidden = (Get-Item $exePath).Attributes -match "Hidden"
+                $sigStatus = (Get-AuthenticodeSignature $exePath).Status
+                if ($isHidden -or $sigStatus -ne 'Valid') {
+                    try {
+                        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                        Write-Log "Killed unsigned/hidden-attribute process: $exePath" "Warning"
+                    } catch {}
+                }
+            }
+        }
+
+        # Kill stealthy processes (present in WMI but not in tasklist)
+        $visible = tasklist /fo csv | ConvertFrom-Csv | Select-Object -ExpandProperty "PID"
+        $all = Get-WmiObject Win32_Process | Select-Object -ExpandProperty ProcessId
+        $hidden = Compare-Object -ReferenceObject $visible -DifferenceObject $all | Where-Object { $_.SideIndicator -eq "=>" }
+
+        foreach ($pid in $hidden) {
+            try {
+                $proc = Get-Process -Id $pid.InputObject -ErrorAction SilentlyContinue
+                if ($proc) {
+                    Stop-Process -Id $pid.InputObject -Force -ErrorAction SilentlyContinue
+                    Write-Log "Killed stealthy (tasklist-hidden) process: $($proc.ProcessName) (PID $($pid.InputObject))" "Error"
+                }
+            } catch {}
+        }
+
+        Start-Sleep -Seconds 5
+    }
+}
+
+
+
+function Start-ProcessKiller {
+        $badNames = @("mimikatz", "procdump", "mimilib", "pypykatz")
+        foreach ($name in $badNames) {
+            Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+# Function to check and remove network bridges
+function Remove-NetworkBridge {
+    try {
+        # Get all network adapters
+        $adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -or $_.Status -eq "Disconnected" }
+        
+        # Check for network bridge
+        $bridge = Get-NetAdapter | Where-Object { $_.Name -like "*Network Bridge*" }
+        
+        if ($bridge) {
+            Write-Host "Network Bridge detected. Attempting to remove..."
+            # Remove the network bridge
+            Remove-NetAdapter -Name $bridge.Name -Confirm:$false -ErrorAction SilentlyContinue
+            Write-Host "Network Bridge removed."
+        }
+        
+        # Ensure no adapters are part of a bridge
+        foreach ($adapter in $adapters) {
+            $bindings = Get-NetAdapterBinding -Name $adapter.Name -ErrorAction SilentlyContinue
+            foreach ($binding in $bindings) {
+                if ($binding.DisplayName -like "*Bridge*") {
+                    Write-Host "Bridge binding found on adapter: $($adapter.Name). Disabling..."
+                    Disable-NetAdapterBinding -Name $adapter.Name -ComponentID $binding.ComponentID -ErrorAction SilentlyContinue
+                    Write-Host "Bridge binding disabled on adapter: $($adapter.Name)"
+                }
+            }
+        }
+    }
+    catch {
+        Write-Host "Error occurred: $_"
+    }
+}
+
+# Whitelist of critical system processes to protect
+$protectedProcesses = @(
+    "System", "smss", "csrss", "wininit", "services", "lsass", 
+    "svchost", "dwm", "explorer", "taskhostw", "winlogon", 
+    "conhost", "cmd", "powershell"
+)
+
+# Trusted driver vendors to exclude from termination
+$trustedDriverVendors = @(
+    "*Microsoft*", "*NVIDIA*", "*Intel*", "*AMD*", "*Realtek*"
+)
+
+# Detect and terminate web servers
+function Detect-And-Terminate-WebServers {
+    $ports = @(80, 443, 8080)  # Common web server ports
+    $connections = Get-NetTCPConnection | Where-Object { $ports -contains $_.LocalPort }
+    foreach ($connection in $connections) {
+        $process = Get-Process -Id $connection.OwningProcess -ErrorAction SilentlyContinue
+        if ($process -and -not ($protectedProcesses -contains $process.ProcessName)) {
+            Write-Log "Web server detected: $($process.ProcessName) (PID: $($process.Id)) on Port $($connection.LocalPort)"
+            Stop-Process -Id $process.Id -Force
+            Write-Log "Web server process terminated: $($process.ProcessName)"
+        }
+    }
+}
+
+# Terminate suspicious web server services
+function Detect-And-Terminate-WebServerServices {
+    $webServices = @("w3svc", "apache2", "nginx")  # Known web server services
+    foreach ($serviceName in $webServices) {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq "Running") {
+            Write-Log "Web server service detected: $($serviceName)"
+            Stop-Service -Name $serviceName -Force
+            Write-Log "Web server service stopped: $($serviceName)"
+        }
+    }
+}
+
+# Detect and terminate screen overlays
+function Detect-And-Terminate-Overlays {
+    $overlayProcesses = Get-Process | Where-Object { 
+        $_.MainWindowTitle -ne "" -and (-not $protectedProcesses -contains $_.ProcessName)
+    }
+    foreach ($process in $overlayProcesses) {
+        Write-Log "Suspicious overlay detected: $($process.ProcessName) (PID: $($process.Id))"
+        Stop-Process -Id $process.Id -Force
+        Write-Log "Overlay process terminated: $($process.ProcessName)"
+    }
+}
+
+# Detect and terminate keyloggers
+function Detect-And-Terminate-Keyloggers {
+    $hooks = Get-WmiObject -Query "SELECT * FROM Win32_Process WHERE CommandLine LIKE '%hook%' OR CommandLine LIKE '%log%' OR CommandLine LIKE '%key%'"
+    foreach ($hook in $hooks) {
+        $process = Get-Process -Id $hook.ProcessId -ErrorAction SilentlyContinue
+        if ($process -and -not ($protectedProcesses -contains $process.ProcessName)) {
+            Write-Log "Keylogger activity detected: $($process.ProcessName) (PID: $($process.Id))"
+            Stop-Process -Id $process.Id -Force
+            Write-Log "Keylogger process terminated: $($process.ProcessName)"
+        }
+    }
+}
+
+# Detect and terminate untrusted drivers
+function Detect-And-Terminate-SuspiciousDrivers {
+    $drivers = Get-WmiObject Win32_SystemDriver | Where-Object {
+        ($_.DisplayName -notlike $trustedDriverVendors) -and $_.Started -eq $true
+    }
+    foreach ($driver in $drivers) {
+        Write-Log "Suspicious driver detected: $($driver.DisplayName)"
+        Stop-Service -Name $driver.Name -Force
+        Write-Log "Suspicious driver stopped: $($driver.DisplayName)"
+    }
+}
+
+# Main loop to run resident in memory
+Start-Job -ScriptBlock {
+while ($true) {
+    Detect-And-Terminate-SuspiciousDrivers
+    Detect-And-Terminate-Keyloggers
+    Detect-And-Terminate-Overlays
+    Detect-And-Terminate-WebServerServices
+    Detect-And-Terminate-WebServers
+    Remove-NetworkBridge
+    Start-ProcessKiller
+	Start-StealthKiller
+	Detect-RootkitByNetstat
+    Kill-Listeners
+	Start-XSSWatcher
+    $detected, $path, $value = Detect-InProcControls
+    if ($detected) {
+        Remove-InProcControls -path $path -value $value
+    } else {
+        Write-Host "No InProc controls detected. Checking again in $CheckIntervalSeconds seconds..."
+    }
+    Start-Sleep -Seconds 10
+}
 }
