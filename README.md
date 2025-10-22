@@ -17,11 +17,3 @@ This script is designed to be added to official windows iso, and prevent this bu
 So, nobody can create new users, which means hackers have zero permissions on your pc, so anything they would normally do is blocked. Add this to a windows installation flashdrive, install windows, and surf without fear of anything. No need to escape to Linux. 
 Windows is a safe enviroment with this script. Note this script is designed to protect you from baddies, not protect you if you're a baddie yourself.
 
-# Installation instructions
-Download official windows.
-Unpack this to some folder.
-Mount official iso and copy install.wim or install.esd from official iso sources folder to this, same location.
-Copy contents of this Iso folder to flash drive.
-Use "bootsect /nt60 driveletter: /force /mbr" command in (elevated) cmd, powershell or terminal to make flash drive bootable.
-Install Windows.
-If Asked for password, type in just username, which is Admin, and wait till logon script runs and logs you in.
