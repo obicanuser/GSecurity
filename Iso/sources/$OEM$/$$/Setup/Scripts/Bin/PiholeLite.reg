@@ -28,6 +28,17 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig\BlockAdDomains\PolicyEntry]
 "https://discord.com/channels/367092205539557376"="0.0.0.0"
+"https://discord.com/channels/150662382874525696"="0.0.0.0"
+"https://discord.com/channels/543652415870730240"="0.0.0.0"
+"https://discord.com/channels/753315331564371999"="0.0.0.0"
+"https://discord.com/channels/549448381613998103"="0.0.0.0"
+"https://discord.com/channels/731641286389661727"="0.0.0.0"
+"https://discord.com/channels/286834982494666752"="0.0.0.0"
+"https://discord.com/channels/849360937248227388"="0.0.0.0"
+"https://discord.com/channels/244230771232079873"="0.0.0.0"
 "https://forum.hr"="0.0.0.0"
 "https://forum.pcekspert.com"="0.0.0.0"
 "https://forum.bug.hr"="0.0.0.0"
+"https://www.reddit.com/r/croatia"="0.0.0.0"
+"https://www.reddit.com/r/cromunity"="0.0.0.0"
+"https://www.reddit.com/r/Dekameron2020"="0.0.0.0"
