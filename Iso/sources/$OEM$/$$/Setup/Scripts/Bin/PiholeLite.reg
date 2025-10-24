@@ -1,0 +1,33 @@
+Windows Registry Editor Version 5.00
+
+; Disable DoH so that policy below can work
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters]
+"DoHPolicy"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge]
+"DnsOverHttpsMode"="off"
+"EncryptedClientHelloEnabled"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters]
+"EnableDoH"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\DNS]
+"EnableAutoDoh"=dword:00000000
+
+; Pihole Lite by Gorstak (Block sites with malicious moderators and admins)
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig]
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig\BlockAdDomains]
+"Name"="BlockAdDomains"
+"Key"="PolicyEntry"
+"PolicyType"=dword:00000001
+"Version"=dword:00000002
+"EntryType"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig\BlockAdDomains\PolicyEntry]
+"https://discord.com/channels/367092205539557376"="0.0.0.0"
+"https://forum.hr"="0.0.0.0"
+"https://forum.pcekspert.com"="0.0.0.0"
+"https://forum.bug.hr"="0.0.0.0"
