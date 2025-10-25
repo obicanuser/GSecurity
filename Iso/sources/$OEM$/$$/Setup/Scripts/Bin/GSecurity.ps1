@@ -323,30 +323,12 @@ $trustedDriverVendors = @(
     "*Microsoft*", "*NVIDIA*", "*Intel*", "*AMD*", "*Realtek*"
 )
 
-# Detect and terminate web servers
-function Detect-And-Terminate-WebServers {
-    $ports = @(80, 443, 8080)  # Common web server ports
-    $connections = Get-NetTCPConnection | Where-Object { $ports -contains $_.LocalPort }
-    foreach ($connection in $connections) {
-        $process = Get-Process -Id $connection.OwningProcess -ErrorAction SilentlyContinue
-        if ($process -and -not ($protectedProcesses -contains $process.ProcessName)) {
-            Write-Log "Web server detected: $($process.ProcessName) (PID: $($process.Id)) on Port $($connection.LocalPort)"
-            Stop-Process -Id $process.Id -Force
-            Write-Log "Web server process terminated: $($process.ProcessName)"
-        }
-    }
-}
-
-# Terminate suspicious web server services
-function Detect-And-Terminate-WebServerServices {
-    $webServices = @("w3svc", "apache2", "nginx")  # Known web server services
-    foreach ($serviceName in $webServices) {
-        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if ($service -and $service.Status -eq "Running") {
-            Write-Log "Web server service detected: $($serviceName)"
-            Stop-Service -Name $serviceName -Force
-            Write-Log "Web server service stopped: $($serviceName)"
-        }
+function Kill-UntrustedLanProcesses {
+    $Safe = @("System","svchost","lsass","services","wininit","winlogon","explorer","taskhostw","dwm","spoolsv")
+    $Procs = Get-NetTCPConnection | Where-Object { $_.RemoteAddress -like '192.168.*' -or $_.RemoteAddress -like '172.16.*' -or $_.RemoteAddress -like '10.*' -or $_.RemoteAddress -like '127.*' } | ForEach-Object { $Procs[$_.OwningProcess] = $true }
+    foreach ($PID in $Procs.Keys) {
+        $Proc = Get-Process -Id $PID -ErrorAction SilentlyContinue
+        if ($Safe -notcontains $Proc.ProcessName) { Stop-Process -Id $PID -Force -ErrorAction SilentlyContinue; Write-Host "Killed $($Proc.ProcessName)" }
     }
 }
 
@@ -393,8 +375,7 @@ while ($true) {
     Detect-And-Terminate-SuspiciousDrivers
     Detect-And-Terminate-Keyloggers
     Detect-And-Terminate-Overlays
-    Detect-And-Terminate-WebServerServices
-    Detect-And-Terminate-WebServers
+    Kill-UntrustedLanProcesses
     Remove-NetworkBridge
     Start-ProcessKiller
 	Start-StealthKiller
